@@ -18,7 +18,7 @@ const _ = grpc.SupportPackageIsVersion7
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type ExclusionServiceClient interface {
-	AccessCritical(ctx context.Context, in *Message, opts ...grpc.CallOption) (*OkResponse, error)
+	AccessCritical(ctx context.Context, in *RequestMessage, opts ...grpc.CallOption) (*ReplyMessage, error)
 }
 
 type exclusionServiceClient struct {
@@ -29,8 +29,8 @@ func NewExclusionServiceClient(cc grpc.ClientConnInterface) ExclusionServiceClie
 	return &exclusionServiceClient{cc}
 }
 
-func (c *exclusionServiceClient) AccessCritical(ctx context.Context, in *Message, opts ...grpc.CallOption) (*OkResponse, error) {
-	out := new(OkResponse)
+func (c *exclusionServiceClient) AccessCritical(ctx context.Context, in *RequestMessage, opts ...grpc.CallOption) (*ReplyMessage, error) {
+	out := new(ReplyMessage)
 	err := c.cc.Invoke(ctx, "/proto.ExclusionService/accessCritical", in, out, opts...)
 	if err != nil {
 		return nil, err
@@ -42,7 +42,7 @@ func (c *exclusionServiceClient) AccessCritical(ctx context.Context, in *Message
 // All implementations must embed UnimplementedExclusionServiceServer
 // for forward compatibility
 type ExclusionServiceServer interface {
-	AccessCritical(context.Context, *Message) (*OkResponse, error)
+	AccessCritical(context.Context, *RequestMessage) (*ReplyMessage, error)
 	mustEmbedUnimplementedExclusionServiceServer()
 }
 
@@ -50,7 +50,7 @@ type ExclusionServiceServer interface {
 type UnimplementedExclusionServiceServer struct {
 }
 
-func (UnimplementedExclusionServiceServer) AccessCritical(context.Context, *Message) (*OkResponse, error) {
+func (UnimplementedExclusionServiceServer) AccessCritical(context.Context, *RequestMessage) (*ReplyMessage, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method AccessCritical not implemented")
 }
 func (UnimplementedExclusionServiceServer) mustEmbedUnimplementedExclusionServiceServer() {}
@@ -67,7 +67,7 @@ func RegisterExclusionServiceServer(s grpc.ServiceRegistrar, srv ExclusionServic
 }
 
 func _ExclusionService_AccessCritical_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(Message)
+	in := new(RequestMessage)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -79,7 +79,7 @@ func _ExclusionService_AccessCritical_Handler(srv interface{}, ctx context.Conte
 		FullMethod: "/proto.ExclusionService/accessCritical",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ExclusionServiceServer).AccessCritical(ctx, req.(*Message))
+		return srv.(ExclusionServiceServer).AccessCritical(ctx, req.(*RequestMessage))
 	}
 	return interceptor(ctx, in, info, handler)
 }

@@ -8,12 +8,19 @@ message Node{
     string name = 2;
 }
 
-message Message{
-    string body = 1;
-    Node user = 2;  
+message RequestMessage{
+    Node user = 1;
+    int32 timestamp = 2;
 }
+
+message ReplyMessage{
+    Node user = 1;
+    int32 timestamp = 2;
+}
+
+
 message okResponse{}
 
 service ExclusionService{
-    rpc accessCritical(Message) returns(okResponse){}
+    rpc accessCritical(RequestMessage) returns(ReplyMessage){}
 }
