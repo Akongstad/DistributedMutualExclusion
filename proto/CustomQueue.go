@@ -4,7 +4,7 @@ import (
 	"sync"
 )
 
-type queue struct {
+type customQueue struct {
 	queue []int
 	lock  sync.RWMutex
 }
