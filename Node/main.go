@@ -30,7 +30,7 @@ type Node struct {
 	timestamp    int
 	ports        []string
 	replyCounter int
-	queue        proto.Queue
+	queue        proto.CustomQueue
 	protoNode    proto.Node
 	proto.UnimplementedExclusionServiceServer
 }
@@ -190,11 +190,11 @@ func main() {
 		timestamp:                           0,
 		ports:                               []string{},
 		replyCounter:                        0,
-		queue:                               proto.Queue{},
+		queue:                               proto.customQueue{queue: make([]string, 0),},
 		protoNode:                           proto.Node{Id: int32(*id), Name: *name},
 		UnimplementedExclusionServiceServer: proto.UnimplementedExclusionServiceServer{},
 	}
-	n.queue
+
 
 	file, err := os.Open("ports.txt")
 	if err != nil {
