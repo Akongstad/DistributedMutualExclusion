@@ -189,7 +189,7 @@ func main() {
 	id := flag.Int("I", 0, "id")
 	flag.Parse()
 
-	queue := &proto.customQueue{queue: make([]int, 0)}
+	queue := &customQueue{queue: make([]int, 0)}
 
 	done := make(chan int)
 	n := &Node{
