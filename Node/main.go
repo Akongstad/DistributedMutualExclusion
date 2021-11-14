@@ -19,6 +19,10 @@ type STATE int
 
 var wait *sync.WaitGroup
 
+func init() {
+	wait = &sync.WaitGroup{}
+}
+
 type Node struct {
 	name         string
 	id           int
@@ -26,7 +30,7 @@ type Node struct {
 	timestamp    int
 	ports        []string
 	replyCounter int
-	queue  		 Queue
+	queue        proto.Queue
 	protoNode    proto.Node
 	proto.UnimplementedExclusionServiceServer
 }
@@ -37,39 +41,79 @@ const (
 	HELD
 )
 
-func (n *Node) ReceiveRequest(ctx context.Context, requestMessage *proto.RequestMessage) error {
-	log.Printf("Received request from: %s", requestMessage.User.Name)
-	if n.state == HELD || (n.state == WANTED && n.timestamp < int(requestMessage.Timestamp)) {
+func (n *Node) ReceiveRequest(ctx context.Context, requestMessage *proto.RequestMessage) (*proto.Void, error) {
+	log.Printf("%s received request from: %s", n.name, requestMessage.User.Name)
 
-		return nil
+	n.timestamp = n.updateClock(int(requestMessage.Timestamp))
+
+	requestID := int(requestMessage.User.Id)
+	void := proto.Void{}
+
+	//if n.state == HELD || (n.state == WANTED && n.timestamp < int(requestMessage.Timestamp)) {
+	if n.shouldDefer(requestMessage) {
+		log.Printf("%s is deferring request from: %s", n.name, requestMessage.User.Name)
+		n.queue.Enqueue(requestID)
+		return &void, nil
 	} else {
-
-		return nil
+		log.Printf("%s is sending reply to: %s", n.name, requestMessage.User.Name)
+		n.SendReply(requestID)
+		return &void, nil
 	}
 }
 
-func (n *Node) AccessCritical(ctx context.Context, requestMessage *proto.RequestMessage) (proto.ReplyMessage, error) {
+func (n *Node) shouldDefer(requestMessage *proto.RequestMessage) bool {
+	if n.state == HELD {
+		return true
+	}
+
+	if n.state != WANTED {
+		return false
+	}
+
+	if n.timestamp < int(requestMessage.Timestamp) {
+		return true
+	}
+
+	if n.timestamp == int(requestMessage.Timestamp) && n.id < int(requestMessage.User.Id) {
+		return true
+	}
+
+	return false
+}
+
+func (n *Node) AccessCritical(ctx context.Context, requestMessage *proto.RequestMessage) (*proto.ReplyMessage, error) {
 	log.Printf("%s, %d, Stamp: %d Requesting access to critical", n.name, n.id, n.timestamp)
 	n.state = WANTED
 	n.MessageAll(ctx, requestMessage)
+	reply := proto.ReplyMessage{Timestamp: int32(n.timestamp), User: &n.protoNode}
 
-	return proto.ReplyMessage{}, nil
+	return &reply, nil
 }
 
-func (n *Node) ReceiveReply(ctx context.Context, replyMessage *proto.ReplyMessage) error {
+func (n *Node) ReceiveReply(ctx context.Context, replyMessage *proto.ReplyMessage) (*proto.Void, error) {
 
 	n.replyCounter++
 
 	if n.replyCounter == len(n.ports)-1 {
 		n.EnterCriticalSection()
 	}
+	return &proto.Void{}, nil
+}
 
-	return nil
+func (n *Node) SendReply(index int) {
+	port := n.ports[index]
+	conn, err := grpc.Dial(":"+port, grpc.WithInsecure())
+	if err != nil {
+		log.Fatalf("Failed to connect to port: %v", err)
+	}
+	defer conn.Close()
+	client := proto.NewExclusionServiceClient(conn)
+	client.ReceiveReply(context.Background(), &proto.ReplyMessage{})
 }
 
 func (n *Node) EnterCriticalSection() {
 	log.Printf("%s entered the critical section", n.name)
-	time.Sleep(5 * time.Second)
+	time.Sleep(3 * time.Second)
 
 	n.LeaveCriticalSection()
 }
@@ -79,16 +123,29 @@ func (n *Node) LeaveCriticalSection() {
 	n.state = RELEASED
 	n.timestamp++
 	n.replyCounter = 0
+
+	for !n.queue.Empty() {
+		index, err := n.queue.Front()
+		n.queue.Dequeue()
+		if err != nil {
+			log.Fatalf("Failed to dequeue: %v", err)
+		}
+		log.Printf("%s is defering a request", n.name)
+		n.SendReply(index)
+	}
+
+	log.Print("FEJL ER LÆNGERE END 138")
 }
 
 func (n *Node) MessageAll(ctx context.Context, msg *proto.RequestMessage) error {
-	for i := 0; i < len(n.ports); i++ { //eller kigge på Serf/Consul til at gruppere serverne
+	for i := 0; i < len(n.ports); i++ {
 		if i != n.id {
-			conn, err := grpc.Dial(":" + n.ports[i])
-			defer conn.Close()
+			conn, err := grpc.Dial(":"+n.ports[i], grpc.WithInsecure())
+
 			if err != nil {
-				log.Fatalf("Failed to listen port: %v", err)
+				log.Fatalf("Failed to dial this port(Message all): %v", err)
 			}
+			defer conn.Close()
 			client := proto.NewExclusionServiceClient(conn)
 
 			client.ReceiveRequest(ctx, msg)
@@ -98,7 +155,7 @@ func (n *Node) MessageAll(ctx context.Context, msg *proto.RequestMessage) error 
 }
 
 func (n *Node) listen() {
-	lis, err := net.Listen("tcp", n.ports[n.id])
+	lis, err := net.Listen("tcp", ":"+n.ports[n.id])
 	if err != nil {
 		log.Fatalf("Failed to listen port: %v", err)
 	}
@@ -112,35 +169,40 @@ func (n *Node) listen() {
 	}
 }
 
-/*func (n *Node) updateClock(otherTimestamp int) {
+func (n *Node) updateClock(otherTimestamp int) int {
 	if n.timestamp < otherTimestamp {
-		return otherTimestamp +1
+		return otherTimestamp + 1
 	} else {
 		return n.timestamp
 	}
-}*/
+}
 
 func main() {
 	name := flag.String("N", "Anonymous", "name")
-	flag.Parse()
 	id := flag.Int("I", 0, "id")
 	flag.Parse()
 
-	n := Node{
-		name:      *name,
-		id:        *id,
-		state:     RELEASED,
-		protoNode: proto.Node{Id: int32(*id), Name: *name},
+	done := make(chan int)
+	n := &Node{
+		name:                                *name,
+		id:                                  *id,
+		state:                               RELEASED,
+		timestamp:                           0,
+		ports:                               []string{},
+		replyCounter:                        0,
+		queue:                               proto.newQueue(),
+		protoNode:                           proto.Node{Id: int32(*id), Name: *name},
+		UnimplementedExclusionServiceServer: proto.UnimplementedExclusionServiceServer{},
 	}
 
-	file, _ := os.Open("/ports.txt")
+	file, err := os.Open("ports.txt")
+	if err != nil {
+		log.Fatal(err)
+	}
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
 		n.ports = append(n.ports, scanner.Text())
 	}
-
-	n.listen()
-
 	// OKAY HVORDAN GØR MAN DET HER
 	wait.Add(1)
 	//go listenToOtherPorts()
@@ -148,21 +210,33 @@ func main() {
 	go func() {
 		defer wait.Done()
 
-		scanner := bufio.NewScanner(os.Stdin)
-		for scanner.Scan() {
+		inScanner := bufio.NewScanner(os.Stdin)
+		for inScanner.Scan() {
 
-			if strings.ToLower(scanner.Text()) == "exit" {
+			if strings.ToLower(inScanner.Text()) == "exit" {
 				os.Exit(1)
-			} else if strings.ToLower(scanner.Text()) == "request access" {
+
+			} else if strings.ToLower(inScanner.Text()) == "request access" {
 				request := proto.RequestMessage{User: &n.protoNode, Timestamp: int32(n.timestamp)}
 				reply, err := n.AccessCritical(context.Background(), &request)
 				if err != nil {
 					log.Fatalf("Failed to Request %v, %d", err, reply.Timestamp)
 					break
 				}
+			} else {
+				log.Printf("Invalid command")
+				log.Printf("Use 'Exit' to terminate Node")
+				log.Printf("Use 'request access' to request access to critical section")
+				log.Printf("----------------------------------------------------------")
 			}
 		}
 	}()
+	go func() {
+		wait.Wait()
+		close(done)
+	}()
+	n.listen()
+	<-done
 }
 
 /* func listenToOtherPorts(){
