@@ -18,9 +18,13 @@ message ReplyMessage{
     int32 timestamp = 2;
 }
 
+message void{}
+
 
 message okResponse{}
 
 service ExclusionService{
-    rpc accessCritical(RequestMessage) returns(ReplyMessage){}
+    rpc AccessCritical(RequestMessage) returns(ReplyMessage){}
+    rpc ReceiveRequest(RequestMessage) returns(void){}
+    rpc ReceiveReply(ReplyMessage) returns(void){}
 }
