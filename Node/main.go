@@ -30,8 +30,9 @@ type Node struct {
 	timestamp    int
 	ports        []string
 	replyCounter int
-	queue        proto.CustomQueue
+	queue        proto.queue
 	protoNode    proto.Node
+	mutex        sync.Locker
 	proto.UnimplementedExclusionServiceServer
 }
 
@@ -43,19 +44,21 @@ const (
 
 func (n *Node) ReceiveRequest(ctx context.Context, requestMessage *proto.RequestMessage) (*proto.Void, error) {
 	log.Printf("%s received request from: %s", n.name, requestMessage.User.Name)
+	log.Printf("----------------------------------------------------------")
 
 	n.timestamp = n.updateClock(int(requestMessage.Timestamp))
 
 	requestID := int(requestMessage.User.Id)
 	void := proto.Void{}
 
-	//if n.state == HELD || (n.state == WANTED && n.timestamp < int(requestMessage.Timestamp)) {
 	if n.shouldDefer(requestMessage) {
 		log.Printf("%s is deferring request from: %s", n.name, requestMessage.User.Name)
+		log.Printf("----------------------------------------------------------")
 		n.queue.Enqueue(requestID)
 		return &void, nil
 	} else {
 		log.Printf("%s is sending reply to: %s", n.name, requestMessage.User.Name)
+		log.Printf("----------------------------------------------------------")
 		n.SendReply(requestID)
 		return &void, nil
 	}
@@ -83,6 +86,7 @@ func (n *Node) shouldDefer(requestMessage *proto.RequestMessage) bool {
 
 func (n *Node) AccessCritical(ctx context.Context, requestMessage *proto.RequestMessage) (*proto.ReplyMessage, error) {
 	log.Printf("%s, %d, Stamp: %d Requesting access to critical", n.name, n.id, n.timestamp)
+	log.Printf("----------------------------------------------------------")
 	n.state = WANTED
 	n.MessageAll(ctx, requestMessage)
 	reply := proto.ReplyMessage{Timestamp: int32(n.timestamp), User: &n.protoNode}
@@ -97,6 +101,9 @@ func (n *Node) ReceiveReply(ctx context.Context, replyMessage *proto.ReplyMessag
 	if n.replyCounter == len(n.ports)-1 {
 		n.EnterCriticalSection()
 	}
+
+	n.updateClock(int(replyMessage.GetTimestamp()))
+
 	return &proto.Void{}, nil
 }
 
@@ -112,29 +119,29 @@ func (n *Node) SendReply(index int) {
 }
 
 func (n *Node) EnterCriticalSection() {
+	n.state = HELD
 	log.Printf("%s entered the critical section", n.name)
-	time.Sleep(3 * time.Second)
+	log.Printf("----------------------------------------------------------")
+	n.timestamp++
+	time.Sleep(5 * time.Second)
 
 	n.LeaveCriticalSection()
 }
 
 func (n *Node) LeaveCriticalSection() {
 	log.Printf("%s is leaving the critical section", n.name)
+	log.Printf("----------------------------------------------------------")
 	n.state = RELEASED
 	n.timestamp++
 	n.replyCounter = 0
 
 	for !n.queue.Empty() {
-		index, err := n.queue.Front()
+		index := n.queue.Front()
 		n.queue.Dequeue()
-		if err != nil {
-			log.Fatalf("Failed to dequeue: %v", err)
-		}
-		log.Printf("%s is defering a request", n.name)
+		log.Printf("%s: reply to defered request", n.name)
+		log.Printf("----------------------------------------------------------")
 		n.SendReply(index)
 	}
-
-	log.Print("FEJL ER LÆNGERE END 138")
 }
 
 func (n *Node) MessageAll(ctx context.Context, msg *proto.RequestMessage) error {
@@ -182,6 +189,8 @@ func main() {
 	id := flag.Int("I", 0, "id")
 	flag.Parse()
 
+	customQueue := &customQueue{queue: make([]int, 0)}
+
 	done := make(chan int)
 	n := &Node{
 		name:                                *name,
@@ -190,11 +199,11 @@ func main() {
 		timestamp:                           0,
 		ports:                               []string{},
 		replyCounter:                        0,
-		queue:                               proto.customQueue{queue: make([]string, 0),},
+		queue:                               *customQueue,
 		protoNode:                           proto.Node{Id: int32(*id), Name: *name},
+		mutex:                               &sync.Mutex{},
 		UnimplementedExclusionServiceServer: proto.UnimplementedExclusionServiceServer{},
 	}
-
 
 	file, err := os.Open("ports.txt")
 	if err != nil {
@@ -240,7 +249,39 @@ func main() {
 	<-done
 }
 
-/* func listenToOtherPorts(){
-	defer wait.Done()
 
-} */
+type customQueue struct {
+	queue []int
+	lock  sync.RWMutex
+}
+
+func (c *customQueue) Enqueue(name int) {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	c.queue = append(c.queue, name)
+}
+
+func (c *customQueue) Dequeue() {
+	if len(c.queue) > 0 {
+		c.lock.Lock()
+		defer c.lock.Unlock()
+		c.queue = c.queue[1:]
+	}
+}
+
+func (c *customQueue) Front() int {
+	if len(c.queue) > 0 {
+		c.lock.Lock()
+		defer c.lock.Unlock()
+		return c.queue[0]
+	}
+	return -1
+}
+
+func (c *customQueue) Size() int {
+	return len(c.queue)
+}
+
+func (c *customQueue) Empty() bool {
+	return len(c.queue) == 0
+}

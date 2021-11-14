@@ -1,44 +1,41 @@
 package proto
 
 import (
-	"fmt"
 	"sync"
 )
 
-type customQueue struct {
-	queue []string
+type queue struct {
+	queue []int
 	lock  sync.RWMutex
 }
 
-func (c *customQueue) Enqueue(name string) {
+func (c *queue) Enqueue(name int) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 	c.queue = append(c.queue, name)
 }
 
-func (c *customQueue) Dequeue() error {
+func (c *queue) Dequeue() {
 	if len(c.queue) > 0 {
 		c.lock.Lock()
 		defer c.lock.Unlock()
 		c.queue = c.queue[1:]
-		return nil
 	}
-	return fmt.Errorf("Pop Error: Queue is empty")
 }
 
-func (c *customQueue) Front() (string, error) {
+func (c *queue) Front() int {
 	if len(c.queue) > 0 {
 		c.lock.Lock()
 		defer c.lock.Unlock()
-		return c.queue[0], nil
+		return c.queue[0]
 	}
-	return "", fmt.Errorf("Peep Error: Queue is empty")
+	return -1
 }
 
-func (c *customQueue) Size() int {
+func (c *queue) Size() int {
 	return len(c.queue)
 }
 
-func (c *customQueue) Empty() bool {
+func (c *queue) Empty() bool {
 	return len(c.queue) == 0
 }
