@@ -9,7 +9,7 @@ type Queue struct {
 	queue *list.List
 }
 
-func newQueue() Queue{
+func (c *Queue) newQueue() Queue{
 	return Queue{
 		queue: list.New(),
 	}

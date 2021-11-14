@@ -190,10 +190,11 @@ func main() {
 		timestamp:                           0,
 		ports:                               []string{},
 		replyCounter:                        0,
-		queue:                               proto.newQueue(),
+		queue:                               proto.Queue{},
 		protoNode:                           proto.Node{Id: int32(*id), Name: *name},
 		UnimplementedExclusionServiceServer: proto.UnimplementedExclusionServiceServer{},
 	}
+	n.queue
 
 	file, err := os.Open("ports.txt")
 	if err != nil {
