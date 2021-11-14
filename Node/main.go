@@ -30,7 +30,7 @@ type Node struct {
 	timestamp    int
 	ports        []string
 	replyCounter int
-	queue        proto.queue
+	queue        proto.
 	protoNode    proto.Node
 	mutex        sync.Locker
 	proto.UnimplementedExclusionServiceServer
@@ -189,7 +189,7 @@ func main() {
 	id := flag.Int("I", 0, "id")
 	flag.Parse()
 
-	customQueue := &customQueue{queue: make([]int, 0)}
+	queue := &proto.queue{queue: make([]int, 0)}
 
 	done := make(chan int)
 	n := &Node{
@@ -199,7 +199,7 @@ func main() {
 		timestamp:                           0,
 		ports:                               []string{},
 		replyCounter:                        0,
-		queue:                               *customQueue,
+		queue:                               *queue,
 		protoNode:                           proto.Node{Id: int32(*id), Name: *name},
 		mutex:                               &sync.Mutex{},
 		UnimplementedExclusionServiceServer: proto.UnimplementedExclusionServiceServer{},
