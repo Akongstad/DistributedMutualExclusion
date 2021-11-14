@@ -26,7 +26,7 @@ type Node struct {
 	timestamp    int
 	ports        []string
 	replyCounter int
-	queue  		Queue
+	queue  		 Queue
 	protoNode    proto.Node
 	proto.UnimplementedExclusionServiceServer
 }
