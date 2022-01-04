@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Akongstad/DistributedMutualExclusion/proto"
+	"github.com/Carlbrr/disys_BetterMutualExclusion/tree/main/DistributedMutualExclusion/proto"
 	"google.golang.org/grpc"
 )
 
@@ -248,7 +248,6 @@ func main() {
 	n.listen()
 	<-done
 }
-
 
 type customQueue struct {
 	queue []int

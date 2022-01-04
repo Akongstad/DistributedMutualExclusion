@@ -1,7 +1,6 @@
 syntax = "proto3";
-option go_package = "/Users/andreaskongstad/Documents/goLang/DistributedMutualExclusion/proto";
+option go_package = "Users/carl9/OneDrive/Skrivebord/betterMutualExclusion/DistributedMutualExclusion/proto";
 package proto;
-
 
 message Node{
     int32 id = 1;
